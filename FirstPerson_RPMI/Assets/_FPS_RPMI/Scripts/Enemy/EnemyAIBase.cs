@@ -15,6 +15,12 @@ public class EnemyAIBase : MonoBehaviour
     Vector3 walkPoint; //Posición del punto a perseguir
     bool walkPointSet; //Si es falso, busca punto. Si es verdadero, no puede buscar punto
 
+    // NUEVO: Variables para el sistema modular de Waypoints
+    [Header("Waypoint Patrol System")]
+    [SerializeField] bool useWaypoints; // Checkbox para decidir qué modo de patrulla usar
+    [SerializeField] Transform[] waypoints; // Array para arrastrar los transforms del escenario
+    private int currentWaypointIndex; // Índice interno para saber a qué waypoint toca ir
+
     [Header("Attacking Stats")]
     [SerializeField] float timeBetweenAttacks = 1f; //Tiempo entre ataque y ataque
     [SerializeField] GameObject projectile; //Ref al prefab del proyectil
@@ -41,7 +47,10 @@ public class EnemyAIBase : MonoBehaviour
 
     private void Awake()
     {
-        target = GameObject.Find("Player").transform;
+        // ARREGLO: Validación por si no encontramos al "Player" por nombre, para evitar NullReferenceExceptions
+        GameObject playerObj = GameObject.Find("Player");
+        if (playerObj != null) target = playerObj.transform;
+
         agent = GetComponent<NavMeshAgent>();
         lastPosition = transform.position;
         lastCheckTime = Time.time;
@@ -60,11 +69,17 @@ public class EnemyAIBase : MonoBehaviour
         //Esfera de detección física
         Collider[] hits = Physics.OverlapSphere(transform.position, sightRange, targetLayer);
         targetInSightRange = hits.Length > 0;
+
         //Si está persiguiendo, calcula la distancia hasta que el mínimo entre dentro del rango de ataque
         if (targetInSightRange)
         {
             float distance = Vector3.Distance(transform.position, target.position);
             targetInAttackRange = distance <= attackRange;
+        }
+        else
+        {
+            // NUEVO: Si el player sale del sightRange, forzamos que el ataque sea falso por seguridad
+            targetInAttackRange = false;
         }
 
         //Lógica de los cambios de estado
@@ -79,15 +94,42 @@ public class EnemyAIBase : MonoBehaviour
         //1 - Revisa si hay punto a patrullar
         if (!walkPointSet)
         {
-            //Si no hay walkpoint, busca uno
-            SearchWalkPoint();
+            // NUEVO: Switch entre Random o Waypoints basado en el bool del Inspector
+            if (useWaypoints && waypoints.Length > 0)
+            {
+                walkPoint = waypoints[currentWaypointIndex].position;
+                walkPointSet = true;
+            }
+            else
+            {
+                //Si no hay walkpoint, busca uno
+                SearchWalkPoint();
+            }
         }
-        else agent.SetDestination(walkPoint); //Si hay punto, lo persigue
+
+        // ARREGLO 1: Sacamos la orden de moverse del 'else'. 
+        // Así, en cuanto se genera el punto (en el mismo frame), el agente empieza a moverse.
+        if (walkPointSet)
+        {
+            agent.SetDestination(walkPoint);
+        }
 
         //2 - Una vez ha llegado al punto, hay que decirle al sistema que puede generar uno nuevo
-        if ((transform.position - walkPoint).sqrMagnitude < 1f)
+        // ARREGLO 2: Cambiamos stoppingDistance por un valor fijo pequeño (0.5f).
+        // Esto evita que se quede bloqueado por problemas de precisión decimal al detenerse.
+        if (!agent.pathPending && agent.remainingDistance <= 0.5f && walkPointSet)
         {
             walkPointSet = false;
+
+            // NUEVO: Si estamos en modo Waypoints, incrementamos el índice para ir al siguiente
+            if (useWaypoints && waypoints.Length > 0)
+            {
+                currentWaypointIndex++;
+                if (currentWaypointIndex >= waypoints.Length)
+                {
+                    currentWaypointIndex = 0; // Volvemos al punto cero si llegamos al final del array
+                }
+            }
         }
     }
 
@@ -103,13 +145,12 @@ public class EnemyAIBase : MonoBehaviour
             Vector3 randomPoint = transform.position + new Vector3(Random.Range(-walkPointRange, walkPointRange), 0, Random.Range(-walkPointRange, walkPointRange));
 
             //Chequear si el punto está en un lugar en el que haya NavMesh Surface
+            // ARREGLO 3: Con SamplePosition ya es suficiente para saber que el punto existe en el NavMesh.
+            // Eliminamos el Raycast físico para evitar dependencias de LayerMasks mal configuradas en el Inspector.
             if (NavMesh.SamplePosition(randomPoint, out NavMeshHit hit, 2f, NavMesh.AllAreas))
             {
                 walkPoint = hit.position; //Determina el Vector3 random a perseguir
-                if (Physics.Raycast(walkPoint, -transform.up, 2f, groundLayer))
-                {
-                    walkPointSet = true; //Tenemos punto y el agente va hacia él
-                }
+                walkPointSet = true; //Tenemos punto y el agente va hacia él
             }
         }
     }
@@ -129,6 +170,10 @@ public class EnemyAIBase : MonoBehaviour
 
         //2- Rotación suavizada para mirar al target
         Vector3 direction = (target.position - transform.position).normalized;
+
+        // NUEVO: Anulamos el eje Y para que el enemigo no se incline hacia arriba o abajo si el jugador salta
+        direction.y = 0;
+
         //Condicional que revisa si agente y target NO se están mirando
         if (direction != Vector3.zero)
         {
@@ -141,7 +186,10 @@ public class EnemyAIBase : MonoBehaviour
         if (!alreadyAttacked)
         {
             Rigidbody rb = Instantiate(projectile, shootPoint.position, Quaternion.identity).GetComponent<Rigidbody>();
-            rb.AddForce(transform.forward * shootSpeedZ, ForceMode.Impulse);
+
+            // NUEVO: Tenías declarada la variable shootSpeedY pero no la usabas en la fuerza. ¡Añadida!
+            rb.AddForce(transform.forward * shootSpeedZ + transform.up * shootSpeedY, ForceMode.Impulse);
+
             alreadyAttacked = true;
             Invoke(nameof(ResetAttack), timeBetweenAttacks);
         }
