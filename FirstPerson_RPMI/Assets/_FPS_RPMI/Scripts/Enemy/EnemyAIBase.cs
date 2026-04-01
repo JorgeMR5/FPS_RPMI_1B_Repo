@@ -47,7 +47,7 @@ public class EnemyAIBase : MonoBehaviour
 
     private void Awake()
     {
-        // ARREGLO: Validación por si no encontramos al "Player" por nombre, para evitar NullReferenceExceptions
+        //Validación por si no encontramos al "Player" por nombre, para evitar NullReferenceExceptions
         GameObject playerObj = GameObject.Find("Player");
         if (playerObj != null) target = playerObj.transform;
 
@@ -78,7 +78,7 @@ public class EnemyAIBase : MonoBehaviour
         }
         else
         {
-            // NUEVO: Si el player sale del sightRange, forzamos que el ataque sea falso por seguridad
+            //Si el player sale del sightRange, forzamos que el ataque sea falso por seguridad
             targetInAttackRange = false;
         }
 
@@ -94,7 +94,7 @@ public class EnemyAIBase : MonoBehaviour
         //1 - Revisa si hay punto a patrullar
         if (!walkPointSet)
         {
-            // NUEVO: Switch entre Random o Waypoints basado en el bool del Inspector
+            //Switch entre Random o Waypoints basado en el bool del Inspector
             if (useWaypoints && waypoints.Length > 0)
             {
                 walkPoint = waypoints[currentWaypointIndex].position;
@@ -107,7 +107,7 @@ public class EnemyAIBase : MonoBehaviour
             }
         }
 
-        // ARREGLO 1: Sacamos la orden de moverse del 'else'. 
+        // Sacamos la orden de moverse del 'else'. 
         // Así, en cuanto se genera el punto (en el mismo frame), el agente empieza a moverse.
         if (walkPointSet)
         {
@@ -115,13 +115,13 @@ public class EnemyAIBase : MonoBehaviour
         }
 
         //2 - Una vez ha llegado al punto, hay que decirle al sistema que puede generar uno nuevo
-        // ARREGLO 2: Cambiamos stoppingDistance por un valor fijo pequeño (0.5f).
+        // Cambiamos stoppingDistance por un valor fijo pequeño (0.5f).
         // Esto evita que se quede bloqueado por problemas de precisión decimal al detenerse.
         if (!agent.pathPending && agent.remainingDistance <= 0.5f && walkPointSet)
         {
             walkPointSet = false;
 
-            // NUEVO: Si estamos en modo Waypoints, incrementamos el índice para ir al siguiente
+            // Si estamos en modo Waypoints, incrementamos el índice para ir al siguiente
             if (useWaypoints && waypoints.Length > 0)
             {
                 currentWaypointIndex++;
@@ -144,8 +144,8 @@ public class EnemyAIBase : MonoBehaviour
             attempts++;
             Vector3 randomPoint = transform.position + new Vector3(Random.Range(-walkPointRange, walkPointRange), 0, Random.Range(-walkPointRange, walkPointRange));
 
-            //Chequear si el punto está en un lugar en el que haya NavMesh Surface
-            // ARREGLO 3: Con SamplePosition ya es suficiente para saber que el punto existe en el NavMesh.
+            // Chequear si el punto está en un lugar en el que haya NavMesh Surface
+            // Con SamplePosition es suficiente para saber que el punto existe en el NavMesh.
             // Eliminamos el Raycast físico para evitar dependencias de LayerMasks mal configuradas en el Inspector.
             if (NavMesh.SamplePosition(randomPoint, out NavMeshHit hit, 2f, NavMesh.AllAreas))
             {
@@ -171,7 +171,7 @@ public class EnemyAIBase : MonoBehaviour
         //2- Rotación suavizada para mirar al target
         Vector3 direction = (target.position - transform.position).normalized;
 
-        // NUEVO: Anulamos el eje Y para que el enemigo no se incline hacia arriba o abajo si el jugador salta
+        // OPCIONAL: Anulamos el eje Y para que el enemigo no se incline hacia arriba o abajo si el jugador salta
         direction.y = 0;
 
         //Condicional que revisa si agente y target NO se están mirando
@@ -187,7 +187,7 @@ public class EnemyAIBase : MonoBehaviour
         {
             Rigidbody rb = Instantiate(projectile, shootPoint.position, Quaternion.identity).GetComponent<Rigidbody>();
 
-            // NUEVO: Tenías declarada la variable shootSpeedY pero no la usabas en la fuerza. ¡Añadida!
+            
             rb.AddForce(transform.forward * shootSpeedZ + transform.up * shootSpeedY, ForceMode.Impulse);
 
             alreadyAttacked = true;
